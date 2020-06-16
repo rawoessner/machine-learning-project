@@ -1,0 +1,107 @@
+---
+title: "Machine Learning Course Project"
+author: "Robert Woessner"
+date: "6/8/2020"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##  Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+## Summary
+
+The goal of this project is to predict the manner in which the participants did the exercise baesed on a specific class. Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes (throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell.  
+
+
+##  Loading Data
+Start by loading the data and deleting columns wih all missing values.
+
+```{r, echo = TRUE, message = FALSE, results = 'hide'}
+library(caret)
+library(rattle)
+library(randomForest)
+
+training <- read.csv('pml-training.csv')
+testing <- read.csv('pml-testing.csv')
+
+#Remove First seven irrelevant columns
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+#Remove Columns with Zero Values
+training1 <- training[,colSums(is.na(training)) == 0]
+testing1 <- testing[,colSums(is.na(training)) == 0]
+
+# Remove Columns with significant missing data
+training1 <- training1[,-grep("kurtosis", colnames(training1))]
+training1 <- training1[,-grep("skewness", colnames(training1))]
+training1 <- training1[,-grep("max_yaw", colnames(training1))]
+training1 <- training1[,-grep("min_yaw", colnames(training1))]
+training1 <- training1[,-grep("amplitude_yaw", colnames(training1))]
+
+testing1 <- testing1[,-grep("kurtosis", colnames(testing1))]
+testing1 <- testing1[,-grep("skewness", colnames(testing1))]
+testing1 <- testing1[,-grep("max_yaw", colnames(testing1))]
+testing1 <- testing1[,-grep("min_yaw", colnames(testing1))]
+testing1 <- testing1[,-grep("amplitude_yaw", colnames(testing1))]
+
+```
+
+##  Partition Data for Cross Validation
+The training data set is partitioned into 2 sets: subTraining (70%) and subTest (30%).
+This will be performed using random subsampling without replacement.
+
+```{r, echo = TRUE, results = 'hide'}
+trainSamples <- createDataPartition(y=training1$classe, p=0.7, list=FALSE)
+subTraining <- training1[trainSamples, ] 
+subTesting <- training1[-trainSamples, ]
+```
+
+## Model Fit with Decision Tree and Plot Tree
+
+```{r, echo = TRUE}
+modFit <- train(classe ~ ., method ='rpart', data = subTraining)
+print(modFit$finalModel)
+
+fancyRpartPlot(modFit$finalModel)
+```
+
+## Predicting and Testing with Decision Tree Model
+```{r, echo = TRUE, eval = 'hide'}
+modFitPredict <- predict(modFit, subTesting, type = "raw")
+print(confusionMatrix(modFitPredict, subTesting$classe))
+```
+
+Accuracy of the Decision tree is at 0.497.  We will now attemp to improve on the accuracy by performing a Random Forest model on the subTesting dataset.  
+
+## Random Forest Model
+
+```{r, echo = TRUE, eval = 'hide'}
+modFitRf <- randomForest(classe ~., data = subTraining, method = "class")
+modFitPredictRf <- predict(modFitRf, subTesting, type = "response")
+print(confusionMatrix(modFitPredictRf, subTesting$classe))
+```
+As can be seen from the Random Forest Model accuracy, there is significant improvment from the decision tree.  
+
+## Final Model
+With a significant improvement in accuracy (now at 0.9963) from the Random Forest Model, we will now use that model for the final prediction on the original testing set.  
+
+```{r, echo = TRUE}
+predict(modFitRf, testing1, type='class')
+```
+
+
